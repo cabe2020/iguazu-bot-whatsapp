@@ -8,6 +8,9 @@
     "start": "node index.js",
     "dev": "node --watch index.js"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "dependencies": {
     "@whiskeysockets/baileys": "^6.7.9",
     "openai": "^4.77.0",
