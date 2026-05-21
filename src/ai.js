@@ -3,8 +3,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const openai = new OpenAI({
+  apiKey: process.env.AI_API_KEY,
+  baseURL: process.env.AI_BASE_URL || "https://api.groq.com/openai/v1",
+});
+const MODEL = process.env.AI_MODEL || "llama3-70b-8192";
 const BOT_NAME = process.env.BOT_NAME || "Guazú";
 
 const SYSTEM_PROMPT = `
