@@ -20,9 +20,12 @@ async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
   const sock = makeWASocket({
+    version: [2, 2413, 1],
     auth: state,
     logger: pino({ level: "silent" }),
-    printQRInTerminal: true,
+    browser: ["Bot Turistico", "Chrome", "120.0.0"],
+    connectTimeoutMs: 60000,
+    keepAliveIntervalMs: 25000,
     markOnlineOnConnect: true,
   });
 
