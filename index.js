@@ -1,6 +1,5 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
 import pino from "pino";
-import qrcode from "qrcode-terminal";
 import dotenv from "dotenv";
 import fs from "fs";
 import { generateResponse } from "./src/ai.js";
@@ -9,15 +8,18 @@ import { getUserMemory, addMessage, updateName } from "./src/memory.js";
 dotenv.config();
 
 const SESSION_DIR = "./sessions";
+const PHONE = process.env.BOT_PHONE || "";
 
 if (!fs.existsSync(SESSION_DIR)) {
   fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
 let reconnectTimeout = null;
+let pairingRequested = false;
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+  pairingRequested = false;
 
   const sock = makeWASocket({
     auth: state,
@@ -25,11 +27,23 @@ async function startBot() {
     markOnlineOnConnect: false,
   });
 
-  sock.ev.on("connection.update", (update) => {
+  sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
-    if (qr) {
-      console.log("\n🔐 Escaneá este QR con WhatsApp (3 puntos > Dispositivos vinculados):\n");
-      qrcode.generate(qr, { small: true });
+    if (qr && !pairingRequested) {
+      pairingRequested = true;
+      if (PHONE) {
+        console.log(`\n📱 Solicitando código de vinculación para ${PHONE}...`);
+        try {
+          let code = await sock.requestPairingCode(PHONE);
+          code = code.match(/.{1,4}/g)?.join("-") || code;
+          console.log("\n═══════════════════════════════════════════");
+          console.log(`  Código: ${code}`);
+          console.log("═══════════════════════════════════════════");
+          console.log("\n📲 Ingresalo en WhatsApp > Dispositivos vinculados > Vincular con número");
+        } catch (e) {
+          console.log(`❌ Error al generar código: ${e.message}`);
+        }
+      }
     }
     if (connection === "open") {
       console.log("✅ Bot conectado a WhatsApp!");
@@ -40,7 +54,7 @@ async function startBot() {
       console.log(`❌ Conexión cerrada. Código: ${statusCode}. Error: ${errorMsg}`);
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log("👋 Sesión cerrada remotamente. Eliminá la carpeta sessions y reiniciá.");
+        console.log("👋 Sesión cerrada. Eliminá la carpeta sessions y reiniciá.");
         return;
       }
 
