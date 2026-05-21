@@ -36,8 +36,9 @@ async function startBot() {
 
   const sock = makeWASocket({
     auth: state,
-    logger: pino({ level: "error" }),
+    logger: pino({ level: "silent" }),
     markOnlineOnConnect: false,
+    fireInitQueries: false,
   });
 
   sock.ev.on("creds.update", () => {
