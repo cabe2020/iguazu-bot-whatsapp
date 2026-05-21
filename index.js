@@ -51,6 +51,17 @@ function restoreSessionFromEnv() {
   return false;
 }
 
+if (process.env.RESET_SESSION === "true") {
+  console.log("🔄 RESET_SESSION activo — limpiando sesión...");
+  try {
+    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+    console.log("✅ Carpeta sessions limpiada");
+  } catch (e) {
+    console.log("❌ Error limpiando sesión:", e.message);
+  }
+}
+
 restoreSessionFromEnv();
 
 let reconnectTimeout = null;
