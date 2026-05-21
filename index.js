@@ -22,10 +22,8 @@ async function startBot() {
   const sock = makeWASocket({
     auth: state,
     logger: pino({ level: "silent" }),
-    printQRInTerminal: false,
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-    fireInitQueries: false,
+    printQRInTerminal: true,
+    markOnlineOnConnect: true,
   });
 
   sock.ev.on("connection.update", (update) => {
