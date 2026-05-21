@@ -2,6 +2,7 @@ import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeys
 import pino from "pino";
 import qrcode from "qrcode-terminal";
 import dotenv from "dotenv";
+import fs from "fs";
 import { generateResponse } from "./src/ai.js";
 import { getUserMemory, addMessage, updateName } from "./src/memory.js";
 
@@ -9,15 +10,22 @@ dotenv.config();
 
 const SESSION_DIR = "./sessions";
 
+if (!fs.existsSync(SESSION_DIR)) {
+  fs.mkdirSync(SESSION_DIR, { recursive: true });
+}
+
+let reconnectTimeout = null;
+
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
 
   const sock = makeWASocket({
-    version: [2, 3000, 1017901307],
     auth: state,
     logger: pino({ level: "silent" }),
     printQRInTerminal: false,
-    markOnlineOnConnect: true,
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    fireInitQueries: false,
   });
 
   sock.ev.on("connection.update", (update) => {
@@ -30,13 +38,19 @@ async function startBot() {
       console.log("✅ Bot conectado a WhatsApp!");
     }
     if (connection === "close") {
-      const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) {
-        console.log("🔁 Reconectando...");
-        startBot();
-      } else {
-        console.log("❌ Sesión cerrada. Eliminá la carpeta sessions y volvé a iniciar.");
+      const statusCode = lastDisconnect?.error?.output?.statusCode;
+      const errorMsg = lastDisconnect?.error?.message || "sin detalle";
+      console.log(`❌ Conexión cerrada. Código: ${statusCode}. Error: ${errorMsg}`);
+
+      if (statusCode === DisconnectReason.loggedOut) {
+        console.log("👋 Sesión cerrada remotamente. Eliminá la carpeta sessions y reiniciá.");
+        return;
       }
+
+      const delay = 3000;
+      console.log(`🔁 Reconectando en ${delay / 1000}s...`);
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = setTimeout(() => startBot(), delay);
     }
   });
 
@@ -48,6 +62,8 @@ async function startBot() {
     if (message.key.fromMe) return;
 
     const remoteJid = message.key.remoteJid;
+    if (!remoteJid.endsWith("@s.whatsapp.net") && !remoteJid.endsWith("@g.us")) return;
+
     const pushName = message.pushName || "viajer@";
     const text =
       message.message.conversation ||
@@ -86,7 +102,7 @@ async function startBot() {
     await sock.sendMessage(remoteJid, { text: response });
   });
 
-  console.log("🚀 Iniciando Guazú Bot...");
+  console.log("🚀 Iniciando Bot Turistico...");
 }
 
-startBot().catch(console.error);
+startBot();
