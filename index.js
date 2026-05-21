@@ -23,7 +23,7 @@ async function startBot() {
 
   const sock = makeWASocket({
     auth: state,
-    logger: pino({ level: "silent" }),
+    logger: pino({ level: "error" }),
     markOnlineOnConnect: false,
   });
 
