@@ -15,6 +15,19 @@ if (!fs.existsSync(SESSION_DIR)) {
   fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
+const SESSION_DATA = process.env.SESSION_DATA || "";
+if (SESSION_DATA) {
+  try {
+    const parsed = JSON.parse(Buffer.from(SESSION_DATA, "base64").toString("utf-8"));
+    for (const [file, content] of Object.entries(parsed)) {
+      fs.writeFileSync(`${SESSION_DIR}/${file}`, content, "utf-8");
+    }
+    console.log("✅ Sesión restaurada desde SESSION_DATA");
+  } catch (e) {
+    console.log("❌ Error al restaurar sesión:", e.message);
+  }
+}
+
 let reconnectTimeout = null;
 let credsSaved = false;
 
