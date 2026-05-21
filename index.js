@@ -1,5 +1,6 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
 import pino from "pino";
+import QRCode from "qrcode";
 import dotenv from "dotenv";
 import fs from "fs";
 import { generateResponse } from "./src/ai.js";
@@ -15,11 +16,10 @@ if (!fs.existsSync(SESSION_DIR)) {
 }
 
 let reconnectTimeout = null;
-let pairingRequested = false;
+let credsSaved = false;
 
 async function startBot() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-  pairingRequested = false;
 
   const sock = makeWASocket({
     auth: state,
@@ -27,89 +27,74 @@ async function startBot() {
     markOnlineOnConnect: false,
   });
 
+  sock.ev.on("creds.update", () => {
+    saveCreds();
+    credsSaved = true;
+  });
+
   sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
-    if (qr && !pairingRequested) {
-      pairingRequested = true;
+
+    if (qr) {
+      const qrText = await QRCode.toString(qr, { type: "terminal", small: true });
+      console.log(`\n🔐 ESCANEÁ ESTE QR:\n${qrText}`);
+      console.log("📱 O usá WhatsApp > Dispositivos vinculados > Vincular con número de teléfono");
+
       if (PHONE) {
-        console.log(`\n📱 Solicitando código de vinculación para ${PHONE}...`);
         try {
           let code = await sock.requestPairingCode(PHONE);
           code = code.match(/.{1,4}/g)?.join("-") || code;
-          console.log("\n═══════════════════════════════════════════");
-          console.log(`  Código: ${code}`);
-          console.log("═══════════════════════════════════════════");
-          console.log("\n📲 Ingresalo en WhatsApp > Dispositivos vinculados > Vincular con número");
-        } catch (e) {
-          console.log(`❌ Error al generar código: ${e.message}`);
-        }
+          console.log(`\n🔑 CÓDIGO: ${code}\n`);
+        } catch {}
       }
     }
+
     if (connection === "open") {
       console.log("✅ Bot conectado a WhatsApp!");
     }
+
     if (connection === "close") {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const errorMsg = lastDisconnect?.error?.message || "sin detalle";
-      console.log(`❌ Conexión cerrada. Código: ${statusCode}. Error: ${errorMsg}`);
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log("👋 Sesión cerrada. Eliminá la carpeta sessions y reiniciá.");
+        console.log("❌ Sesión cerrada remotamente. Eliminá la carpeta sessions y volvé a iniciar.");
         return;
       }
 
-      const delay = 3000;
-      console.log(`🔁 Reconectando en ${delay / 1000}s...`);
+      console.log(`🔁 Reconectando en 3s... (${statusCode}: ${errorMsg})`);
       clearTimeout(reconnectTimeout);
-      reconnectTimeout = setTimeout(() => startBot(), delay);
+      reconnectTimeout = setTimeout(() => startBot(), 3000);
     }
   });
 
-  sock.ev.on("creds.update", saveCreds);
-
   sock.ev.on("messages.upsert", async (msg) => {
     const message = msg.messages[0];
-    if (!message.key || !message.message) return;
-    if (message.key.fromMe) return;
+    if (!message.key || !message.message || message.key.fromMe) return;
 
     const remoteJid = message.key.remoteJid;
     if (!remoteJid.endsWith("@s.whatsapp.net") && !remoteJid.endsWith("@g.us")) return;
 
     const pushName = message.pushName || "viajer@";
-    const text =
-      message.message.conversation ||
-      message.message.extendedTextMessage?.text ||
-      "";
-
+    const text = message.message.conversation || message.message.extendedTextMessage?.text || "";
     if (!text.trim()) return;
 
     const userId = remoteJid;
     const mem = getUserMemory(userId);
-
-    if (!mem.name && pushName) {
-      updateName(userId, pushName);
-    }
+    if (!mem.name && pushName) updateName(userId, pushName);
 
     const userName = mem.name || pushName;
-
     addMessage(userId, "user", text);
-    const mensajeConNombre = mem.known
-      ? text
-      : `(nombre del usuario: ${userName}) ${text}`;
+    const mensajeConNombre = mem.known ? text : `(nombre: ${userName}) ${text}`;
 
     console.log(`💬 ${userName}: ${text}`);
 
     await sock.sendPresenceUpdate("composing", remoteJid);
 
-    const history = mem.history.map((h) => ({
-      role: h.role,
-      content: h.content,
-    }));
-
+    const history = mem.history.map((h) => ({ role: h.role, content: h.content }));
     const response = await generateResponse(mensajeConNombre, history);
 
     addMessage(userId, "assistant", response);
-
     await sock.sendMessage(remoteJid, { text: response });
   });
 
