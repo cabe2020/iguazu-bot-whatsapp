@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import { generateResponse } from "./src/ai.js";
 import { getUserMemory, addMessage, updateName } from "./src/memory.js";
+import { loadSessionFromSupabase, saveSessionToSupabase } from "./src/supabase.js";
 
 dotenv.config();
 
@@ -15,7 +16,21 @@ if (!fs.existsSync(SESSION_DIR)) {
   fs.mkdirSync(SESSION_DIR, { recursive: true });
 }
 
-function restoreSessionFromEnv() {
+if (process.env.RESET_SESSION === "true") {
+  console.log("🔄 RESET_SESSION activo — limpiando sesión...");
+  try {
+    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    fs.mkdirSync(SESSION_DIR, { recursive: true });
+    console.log("✅ Carpeta sessions limpiada");
+  } catch (e) {
+    console.log("❌ Error limpiando sesión:", e.message);
+  }
+}
+
+async function restoreSession() {
+  const restored = await loadSessionFromSupabase(SESSION_DIR);
+  if (restored) return true;
+
   const data = process.env.SESSION_DATA;
   if (data) {
     try {
@@ -51,19 +66,6 @@ function restoreSessionFromEnv() {
   return false;
 }
 
-if (process.env.RESET_SESSION === "true") {
-  console.log("🔄 RESET_SESSION activo — limpiando sesión...");
-  try {
-    fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-    fs.mkdirSync(SESSION_DIR, { recursive: true });
-    console.log("✅ Carpeta sessions limpiada");
-  } catch (e) {
-    console.log("❌ Error limpiando sesión:", e.message);
-  }
-}
-
-restoreSessionFromEnv();
-
 let reconnectTimeout = null;
 let credsSaved = false;
 let pairingInterval = null;
@@ -87,6 +89,7 @@ async function startBot() {
   sock.ev.on("creds.update", () => {
     saveCreds();
     credsSaved = true;
+    saveSessionToSupabase(SESSION_DIR);
   });
 
   sock.ev.on("connection.update", async (update) => {
@@ -115,8 +118,12 @@ async function startBot() {
         clearInterval(pairingInterval);
         pairingInterval = null;
       }
-      if (!process.env.SESSION_DATA && !process.env.SESS_P1) {
-        setTimeout(encodeAndLogSession, 15000);
+      if (!process.env.SUPABASE_URL) {
+        if (!process.env.SESSION_DATA && !process.env.SESS_P1) {
+          setTimeout(encodeAndLogSession, 15000);
+        }
+      } else {
+        setTimeout(() => saveSessionToSupabase(SESSION_DIR), 15000);
       }
     }
 
@@ -190,4 +197,7 @@ function encodeAndLogSession() {
   }
 }
 
-startBot();
+(async () => {
+  await restoreSession();
+  startBot();
+})();
