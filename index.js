@@ -28,11 +28,11 @@ if (process.env.RESET_SESSION === "true") {
 }
 
 async function restoreSession() {
-  if (process.env.SKIP_SUPABASE_SESSION === "true") {
-    console.log("⏭️ SKIP_SUPABASE_SESSION activo — ignorando Supabase");
-  } else {
+  if (process.env.SKIP_SUPABASE_SESSION !== "true") {
     const restored = await loadSessionFromSupabase(SESSION_DIR);
     if (restored) return true;
+  } else {
+    console.log("⏭️ SKIP_SUPABASE_SESSION activo — ignorando Supabase");
   }
   if (restored) return true;
 
