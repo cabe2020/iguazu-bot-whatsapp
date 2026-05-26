@@ -66,6 +66,54 @@ async function restoreSession() {
   return false;
 }
 
+const IMAGES = {
+  cataratas: "https://upload.wikimedia.org/wikipedia/commons/f/fa/Cataratas_del_Iguaz%C3%BA_%2826804565465%29.jpg",
+  garganta: "https://upload.wikimedia.org/wikipedia/commons/e/e5/Garganta_do_Diabo.jpg",
+  hito: "https://upload.wikimedia.org/wikipedia/commons/3/3d/Hito_tres_fronteras.jpg",
+  parqueAves: "https://upload.wikimedia.org/wikipedia/commons/f/f7/Arara_canind%C3%A9.jpg",
+  sanIgnacio: "https://upload.wikimedia.org/wikipedia/commons/d/d5/San_Ignacio_Mini_002.jpg",
+};
+
+function findImage(text) {
+  const lower = text.toLowerCase();
+  if (lower.includes("garganta")) return IMAGES.garganta;
+  if (lower.includes("hito") || lower.includes("tres fronteras")) return IMAGES.hito;
+  if (lower.includes("aves") || lower.includes("parque das aves")) return IMAGES.parqueAves;
+  if (lower.includes("san ignacio") || lower.includes("jesuítica") || lower.includes("ruinas")) return IMAGES.sanIgnacio;
+  if (lower.includes("catarata") || lower.includes("parque nacional") || lower.includes("circuito")) return IMAGES.cataratas;
+  return null;
+}
+
+const COMMANDS = {
+  "/comandos": "📋 *Comandos disponibles:*\n\n/comandos — Mostrar esta ayuda\n/horarios — Horarios del parque\n/precios — Precios de entradas\n/itinerario — Sugerencia de itinerario\n/clima — Mejor época para visitar\n/restaurantes — Recomendaciones para comer\n/emergencias — Números útiles",
+  "/horarios": "🕐 *Horarios Parque Nacional Iguazú*\n\nAbierto todos los días de 8:00 a 18:00.\nÚltimo ingreso: 16:30.\n\nTrencito ecológico: cada 15-20 minutos desde el centro de visitantes.\n\n📌 Tip: llegá a las 8:00 para disfrutar con menos gente.",
+  "/precios": "💰 *Precios entrada Parque Nacional Iguazú* (2025/2026 aprox):\n\n🇦🇷 Argentinos: ~$12,000 ARS\n🌎 Mercosur: ~$22,000 ARS\n🌍 Extranjeros: ~$40,000 ARS\n\n✅ Comprá online en cataratasdeliguazu.com.ar\n👶 Menores de 6: gratis\n👴 Jubilados: 50% desc.",
+  "/itinerario": "🗺️ *Itinerarios sugeridos:*\n\n*1 día:* llegá 8am → Garganta del Diablo → Circuito Inferior → Almuerzo → Circuito Superior → Sendero Verde\n\n*2 días:* Día 1 — Circuitos + Gran Aventura. Día 2 — Lado brasileño + Parque das Aves\n\n*3 días:* Agregá Paseo Ecológico + San Ignacio Miní o Ciudad del Este\n\n📌 Decime cuántos días tenés y te ayudo a planificar!",
+  "/clima": "🌤️ *Mejor época para visitar:*\n\n🌸 *Otoño* (mar-may): 20-30°C, poco lluvia. IDEAL\n🌻 *Primavera* (sep-nov): 22-35°C, lindo pero empiezan lluvias\n☀️ *Verano* (dic-feb): 30-40°C, húmedo, perfecto para mojarse\n❄️ *Invierno* (jul-ago): 10-22°C, menos turistas",
+  "/restaurantes": "🍽️ *Recomendaciones para comer:*\n\n🥩 *La Rueda* — Parrilla regional (Av. Córdoba 189)\n🍝 *Charo* — Comida casera misionera (Av. Córdoba 156)\n👨‍🍳 *Aqua* — Cocina de autor (Av. Tres Fronteras 720)\n🍕 *La Mamma* — Italianas (Félix de Azara 244)\n\nProbá el surubí, la milanesa de surubí, chipá y mbeyú!",
+  "/emergencias": "🆘 *Emergencias en Puerto Iguazú:*\n\n🚔 Policía: 101\n🚑 Ambulancia: 107\n🔥 Bomberos: 100\n🏥 Hospital SAMIC: +54 3757 421379\n\nPolicía Turística: 0800-555-5065"
+};
+
+function handleComand(text) {
+  const lower = text.trim().toLowerCase();
+  for (const [cmd, response] of Object.entries(COMMANDS)) {
+    if (lower === cmd || lower.startsWith(cmd + " ")) return response;
+  }
+  return null;
+}
+
+const WELCOME_MESSAGE = `👋 *Hola! Soy Guazú, tu asistente turístico de Iguazú!* 🇦🇷🌿
+
+Puedo ayudarte con información sobre:
+🌊 Cataratas del Iguazú (horarios, precios, circuitos)
+🍽️ Restaurantes y gastronomía local
+🏨 Alojamiento para todos los presupuestos
+🗺️ Itinerarios de 1, 2 o 3 días
+🚌 Cómo llegar y moverte
+🆘 Emergencias y datos útiles
+
+Escribí */comandos* para ver todo lo que puedo hacer o simplemente preguntame lo que necesites! 😊`;
+
 let reconnectTimeout = null;
 let credsSaved = false;
 let pairingInterval = null;
@@ -159,21 +207,42 @@ async function startBot() {
 
     const userId = remoteJid;
     const mem = getUserMemory(userId);
+    const isNew = !mem.known;
+
     if (!mem.name && pushName) updateName(userId, pushName);
-
     const userName = mem.name || pushName;
-    addMessage(userId, "user", text);
-    const mensajeConNombre = mem.known ? text : `(nombre: ${userName}) ${text}`;
 
+    addMessage(userId, "user", text);
     console.log(`💬 ${userName}: ${text}`);
 
     await sock.sendPresenceUpdate("composing", remoteJid);
+
+    const cmdResponse = handleComand(text);
+    if (cmdResponse) {
+      await sock.sendMessage(remoteJid, { text: cmdResponse });
+      addMessage(userId, "assistant", cmdResponse);
+      return;
+    }
+
+    if (isNew) {
+      await sock.sendMessage(remoteJid, { text: WELCOME_MESSAGE });
+      addMessage(userId, "assistant", WELCOME_MESSAGE);
+      await sock.sendPresenceUpdate("composing", remoteJid);
+    }
+
+    const mensajeConNombre = mem.known ? text : `(nombre: ${userName}) ${text}`;
 
     const history = mem.history.map((h) => ({ role: h.role, content: h.content }));
     const response = await generateResponse(mensajeConNombre, history);
 
     addMessage(userId, "assistant", response);
-    await sock.sendMessage(remoteJid, { text: response });
+
+    const imgUrl = findImage(text + " " + response);
+    if (imgUrl) {
+      await sock.sendMessage(remoteJid, { image: { url: imgUrl }, caption: response });
+    } else {
+      await sock.sendMessage(remoteJid, { text: response });
+    }
   });
 
   console.log("🚀 Iniciando Bot Turistico...");
