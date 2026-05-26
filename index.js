@@ -1,8 +1,8 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
 import pino from "pino";
-
 import dotenv from "dotenv";
 import fs from "fs";
+import https from "https";
 import { generateResponse } from "./src/ai.js";
 import { getUserMemory, addMessage, updateName } from "./src/memory.js";
 import { loadSessionFromSupabase, saveSessionToSupabase } from "./src/supabase.js";
@@ -82,6 +82,17 @@ function findImage(text) {
   if (lower.includes("san ignacio") || lower.includes("jesuítica") || lower.includes("ruinas")) return IMAGES.sanIgnacio;
   if (lower.includes("catarata") || lower.includes("parque nacional") || lower.includes("circuito")) return IMAGES.cataratas;
   return null;
+}
+
+function fetchImage(url) {
+  return new Promise((resolve, reject) => {
+    https.get(url, { headers: { "User-Agent": "Mozilla/5.0" } }, (res) => {
+      if (res.statusCode !== 200) return reject(new Error(`HTTP ${res.statusCode}`));
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+    }).on("error", reject);
+  });
 }
 
 const COMMANDS = {
@@ -242,7 +253,12 @@ async function startBot() {
 
     const imgUrl = findImage(text + " " + response);
     if (imgUrl) {
-      await sock.sendMessage(remoteJid, { image: { url: imgUrl }, caption: response });
+      try {
+        const imgBuffer = await fetchImage(imgUrl);
+        await sock.sendMessage(remoteJid, { image: imgBuffer, caption: response });
+      } catch {
+        await sock.sendMessage(remoteJid, { text: response });
+      }
     } else {
       await sock.sendMessage(remoteJid, { text: response });
     }
