@@ -34,7 +34,6 @@ async function restoreSession() {
   } else {
     console.log("⏭️ SKIP_SUPABASE_SESSION activo — ignorando Supabase");
   }
-  if (restored) return true;
 
   const data = process.env.SESSION_DATA;
   if (data) {
