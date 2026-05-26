@@ -28,7 +28,12 @@ if (process.env.RESET_SESSION === "true") {
 }
 
 async function restoreSession() {
-  const restored = await loadSessionFromSupabase(SESSION_DIR);
+  if (process.env.SKIP_SUPABASE_SESSION === "true") {
+    console.log("⏭️ SKIP_SUPABASE_SESSION activo — ignorando Supabase");
+  } else {
+    const restored = await loadSessionFromSupabase(SESSION_DIR);
+    if (restored) return true;
+  }
   if (restored) return true;
 
   const data = process.env.SESSION_DATA;
@@ -148,7 +153,7 @@ async function startBot() {
   sock.ev.on("creds.update", () => {
     saveCreds();
     credsSaved = true;
-    saveSessionToSupabase(SESSION_DIR);
+    if (process.env.SKIP_SUPABASE_SESSION !== "true") saveSessionToSupabase(SESSION_DIR);
   });
 
   sock.ev.on("connection.update", async (update) => {
@@ -185,7 +190,7 @@ async function startBot() {
           setTimeout(encodeAndLogSession, 15000);
         }
       } else {
-        setTimeout(() => saveSessionToSupabase(SESSION_DIR), 15000);
+        if (process.env.SKIP_SUPABASE_SESSION !== "true") setTimeout(() => saveSessionToSupabase(SESSION_DIR), 15000);
       }
     }
 
