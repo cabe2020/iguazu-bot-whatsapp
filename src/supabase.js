@@ -8,9 +8,13 @@ const TABLE = "whatsapp_sessions";
 
 let supabase = null;
 if (supabaseUrl && supabaseKey) {
-  supabase = createClient(supabaseUrl, supabaseKey, {
-    realtime: { transport: WebSocket },
-  });
+  try {
+    supabase = createClient(supabaseUrl, supabaseKey, {
+      realtime: { transport: WebSocket },
+    });
+  } catch (e) {
+    console.log("⚠️ Supabase no disponible:", e.message);
+  }
 }
 
 let saveTimeout = null;
