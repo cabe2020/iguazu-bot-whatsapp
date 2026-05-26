@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import WebSocket from "ws";
 import fs from "fs";
 
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -7,7 +8,9 @@ const TABLE = "whatsapp_sessions";
 
 let supabase = null;
 if (supabaseUrl && supabaseKey) {
-  supabase = createClient(supabaseUrl, supabaseKey);
+  supabase = createClient(supabaseUrl, supabaseKey, {
+    realtime: { transport: WebSocket },
+  });
 }
 
 let saveTimeout = null;
