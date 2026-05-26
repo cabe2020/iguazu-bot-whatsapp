@@ -1,6 +1,6 @@
 import { makeWASocket, useMultiFileAuthState, DisconnectReason } from "@whiskeysockets/baileys";
 import pino from "pino";
-import QRCode from "qrcode";
+
 import dotenv from "dotenv";
 import fs from "fs";
 import { generateResponse } from "./src/ai.js";
@@ -144,17 +144,20 @@ async function startBot() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      const qrText = await QRCode.toString(qr, { type: "terminal", small: true });
-      console.log(`\n🔐 ESCANEÁ ESTE QR:\n${qrText}`);
-      console.log("📱 O usá WhatsApp > Dispositivos vinculados > Vincular con número de teléfono");
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qr)}`;
+      console.log(`\n🔐 ESCANEÁ ESTE QR abriendo este link:\n${qrUrl}`);
+      console.log("O abrí WhatsApp en tu celular → 3 puntitos → Dispositivos vinculados → Vincular con número de teléfono");
 
       if (PHONE && !pairingInterval) {
         pairingInterval = setInterval(async () => {
           try {
             let code = await sock.requestPairingCode(PHONE);
             code = code.match(/.{1,4}/g)?.join("-") || code;
-            console.log(`\n🔑 CÓDIGO (válido 60s): ${code}  [${new Date().toLocaleTimeString()}]\n`);
-          } catch {}
+            console.log(`\n🔑 CÓDIGO: ${code}  (válido 60s, generado ${new Date().toLocaleTimeString()})`);
+            console.log("📱 En WhatsApp: 3 puntitos → Dispositivos vinculados → Vincular con número de teléfono → ingresá el código\n");
+          } catch (e) {
+            console.log("⚠️ Error generando código:", e.message);
+          }
         }, 10000);
         pairingInterval.unref();
       }
